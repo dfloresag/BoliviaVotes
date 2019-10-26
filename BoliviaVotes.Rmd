@@ -1,0 +1,262 @@
+---
+title: "Bolivia Vota"
+output: github_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      fig.width = 28, 
+                      fig.height=7, cache =TRUE)
+```
+
+```{r, include = FALSE}
+rm(list=ls())
+
+library(ggplot2)
+library(reshape)
+library(dplyr)
+```
+
+This document summarizes our attempts at finding voting tampering in the recent Bolivian elections. The datasets were obtained via the official polling authority Organo Electoral Plurinacional (OEP) at the website `http://computo.oep.org.bo`. 
+
+## 1. Comparison between Valid Votes and Reports
+
+```{r, include = FALSE}
+partidos <- c(
+  "CC","FPV","MTS","UCS","MAS...IPSP","X21F","PDC","MNR","PAN.BOL"
+)
+
+emitidos <-c(partidos, "Nulos", "Blancos") 
+```
+
+For this comparison, we are considering two datasets 
+
+- Results of the rapid counting process obtained on Sunday 22, October 2019 at 20:38:53 (GMT-4) that we shall call **TREP** sample. 
+- Results of the computations Friday 25 October 2019 at 01:40:43(GMT-4), which we shall call the **pres** sample. 
+
+In what follows, we shall focus on the results for the election for President and Vicepresident of the Plurinational State. 
+
+```{r, echo = FALSE}
+actas      <- read.csv("./datasets/acta.2019.10.24.01.40.43.csv")
+
+actas_pres <- actas %>%  
+  filter(
+    Elección  == "Presidente y Vicepresidente"
+    )
+
+actas_pres$Votos.Partidos <- 
+  actas_pres[,partidos] %>% 
+  rowSums()
+
+actas_pres$Votos.Emitidos <- 
+  actas_pres[,emitidos] %>% 
+  rowSums()
+
+actas_pres$Diferencia.Partidos <- 
+  actas_pres$Votos.Partidos - actas_pres$Votos.Válidos
+
+actas_pres %>% 
+  mutate(
+    Irreg = ifelse(
+      Diferencia.Partidos!=0,"Irregular","Regular"), 
+    Sampl = "pres"
+    ) -> actas_pres
+
+summary(actas_pres$Votos.Emitidos)
+
+```
+
+```{r}
+actas_trep <- read.csv("./datasets/acta.2019.10.22.20.38.53.csv")
+
+actas_pres_trep <- actas_trep %>%  
+  filter(
+    Elección  == "Presidente y Vicepresidente"
+    ) 
+
+actas_pres_trep$Votos.Partidos <- 
+  actas_pres_trep[,partidos] %>% 
+  rowSums()
+
+actas_pres_trep$Votos.Emitidos <- 
+  actas_pres_trep[,emitidos] %>% 
+  rowSums()
+
+actas_pres_trep$Diferencia.Partidos <- 
+  actas_pres_trep$Votos.Partidos - actas_pres_trep$Votos.Válidos
+
+actas_pres_trep %>% 
+  mutate(
+    Irreg = ifelse(
+      Diferencia.Partidos!=0,"Irregular","Regular"),
+    Sampl = "trep"
+    ) -> actas_pres_trep
+
+```
+
+`r nrow (actas_pres)`
+`r nrow (actas_pres_trep)`
+
+## Percieved Irregularities
+
+```{r}
+actas_pres %>% 
+  filter(Irreg=="Irregular")  %>%
+  select(Diferencia.Partidos) %>%
+  summary()
+
+actas_pres %>% 
+  filter(Irreg=="Irregular")  %>%
+  select(Diferencia.Partidos) %>%
+  abs() %>%
+  sum() 
+
+actas_pres %>% 
+  select(Votos.Emitidos) %>% 
+  sum() 
+
+actas_pres_tidy <- actas_pres %>% melt(
+  measure.vars  = 
+    c("CC","FPV","MTS","UCS","MAS...IPSP","X21F","PDC","MNR","PAN.BOL"),
+  variable_name= "Partido")
+```
+
+```{r}
+actas_pres_trep$Diferencia.Partidos <- 
+  actas_pres_trep$Votos.Partidos - actas_pres_trep$Votos.Válidos
+
+actas_pres_trep %>% 
+  mutate(
+    Irreg = ifelse(
+      Diferencia.Partidos!=0,"Irregular","Regular") 
+    ) -> actas_pres
+
+## 
+
+actas_pres_trep %>% 
+  filter(Irreg=="Irregular")  %>%
+  select(Diferencia.Partidos) %>%
+  summary()
+
+actas_pres_trep %>% 
+  filter(Irreg=="Irregular")  %>%
+  select(Diferencia.Partidos) %>%
+  abs() %>%
+  sum() 
+
+actas_pres_trep %>% 
+  select(Votos.Emitidos) %>% 
+  sum() 
+
+actas_trep_tidy <- actas_pres_trep %>% melt(
+  measure.vars  = 
+    c("CC","FPV","MTS","UCS","MAS...IPSP","X21F","PDC","MNR","PAN.BOL"),
+  variable_name= "Partido")
+
+```
+
+## 2. Overviewing voting per Polling Districts 
+
+In this part, we try to check whether there is a difference between the results of voting at each booth within a precint and the results of the precint. One would expect that the distribution of the former is somehow reflective of the latter. This can be assessed graphically or via testing procedures with the respective corrections. 
+
+However, booths with a small amount of voters:
+
+1. Could have a problem reflecting the distribution of the precint as they are small samples.
+2. Hinder the statistical testing process.
+
+To adress the first 
+
+```{r}
+ComoVotaMiRecinto <- function(recinto, porcentajes =FALSE){
+   if(!(recinto %in% levels(actas$Recinto))) {
+     stop(message("Nombre de recinto no valido."))
+   } else {
+     data <- actas_pres %>% melt(
+       measure.vars  = partidos,
+       variable_name= "Partido") %>%
+       mutate(Porcentaje.por.Partido =  value/Votos.Emitidos*100) %>%
+       filter(
+         Recinto  == recinto) %>%
+       group_by(Número.Mesa, Partido)
+       
+       if(!porcentajes){
+        plots <- data %>% 
+          ggplot(mapping = aes(x = Partido, 
+                               y=value, 
+                               fill = factor(Número.Mesa))) +
+          geom_col(position ="dodge")+
+          facet_grid(.~Departamento+Provincia+Localidad+Irreg, 
+                     scales = "free_y") + 
+          ggtitle(paste("Localidad :", recinto, "- Total")) + 
+          labs(x = "Partido", y = "Total de Votos")
+       } else if (porcentajes){
+         plots <- data %>% 
+           ggplot(mapping = aes(x = Partido, 
+                                y = Porcentaje.por.Partido, 
+                                fill = factor(Número.Mesa))) +
+           geom_col(position ="dodge")+
+           facet_grid(.~Departamento+Provincia+Localidad+Irreg, scales = "free_y") + 
+           ggtitle(paste("Localidad :", recinto, "- Porcentaje por Mesa"))+ 
+           labs(x = "Partido", y = "Porcentaje de Votos")
+       }
+     plots
+   }
+}
+```
+
+### Some Examples
+
+```{r, echo = FALSE, eval = FALSE}
+ComoVotaMiRecinto("Colegio German Busch", porcentajes = FALSE)
+ComoVotaMiRecinto("Colegio German Busch", porcentajes = TRUE)
+```
+
+```{r, echo = FALSE, eval = FALSE}
+ComoVotaMiRecinto("Escuela Carlos Medinaceli", porcentajes = FALSE)
+ComoVotaMiRecinto("Escuela Carlos Medinaceli", porcentajes = TRUE)
+```
+
+```{r, echo = FALSE, eval = FALSE}
+ComoVotaMiRecinto("Colegio Bolivia", porcentajes = FALSE)
+ComoVotaMiRecinto("Colegio Bolivia", porcentajes = TRUE)
+```
+
+
+```{r, echo = FALSE, eval = FALSE}
+ComoVotaMiRecinto("Escuela Simón Bolivar", porcentajes = FALSE)
+ComoVotaMiRecinto("Escuela Simón Bolivar", porcentajes = TRUE)
+```
+
+
+```{r, echo = FALSE, eval = FALSE}
+ComoVotaMiRecinto("Escuela Alto Achumani", porcentajes = FALSE)
+ComoVotaMiRecinto("Escuela Alto Achumani", porcentajes = TRUE)
+```
+
+```{r, echo = FALSE, eval = FALSE}
+ComoVotaMiRecinto("U. E. Ff. Aa. De La Nación", porcentajes = FALSE)
+ComoVotaMiRecinto("U. E. Ff. Aa. De La Nación", porcentajes = TRUE)
+```
+
+```{r, echo = FALSE, eval = FALSE}
+ComoVotaMiRecinto("Esc. San Jose", porcentajes = FALSE)
+ComoVotaMiRecinto("Esc. San Jose", porcentajes = TRUE)
+```
+
+```{r, echo = FALSE, eval = FALSE}
+ComoVotaMiRecinto("U.E. Ignacio Warnes", porcentajes = FALSE)
+ComoVotaMiRecinto("U.E. Ignacio Warnes", porcentajes = TRUE)
+```
+
+```{r, echo = FALSE, eval = FALSE}
+ComoVotaMiRecinto("Colegio 6 de Junio", porcentajes = FALSE)
+ComoVotaMiRecinto("Colegio 6 de Junio", porcentajes = TRUE)
+```
+
+
+```{r, echo = FALSE}
+ComoVotaMiRecinto("Colegio Simon Bolivar", porcentajes = FALSE)
+ComoVotaMiRecinto("Colegio Simon Bolivar", porcentajes = TRUE)
+```
+
+
+
