@@ -3,7 +3,7 @@ title: "Bolivia Vota"
 output: html_document
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, 
+knitr::opts_chunk$set(echo = FALSE, 
                       fig.width = 28, 
                       fig.height=7, cache =FALSE)
 ```
@@ -43,7 +43,7 @@ As a first exercise, we consider the **PRES** sample. We aim to compare the foll
 Our hypothesis is that booths that show divergence between these two quantities are suspicious of being tampered, as their difference (`Votos.Partidos - Votos.Validos`) is expected to be zero. We shall identify these booths in the variable `Sospecha`
 
 ```{r, echo = FALSE}
-actas      <- read.csv("./datasets/acta.2019.10.24.01.40.43.csv")
+actas      <- read.csv("./datasets/acta.2019.10.25.21.09.30.csv")
 
 actas_pres <- actas %>%  
   filter(
@@ -84,7 +84,7 @@ actas_pres %>%
 The conclusions of this first exploration are as follows:
 
 - A total of `r Total.Sospechas` booths were deemed as supicious. Given that the total amount of booths is `r nrow(actas_pres)`, this amount represents `r round(Total.Sospechas/nrow(actas_pres)*100, digits = 2)`% of the total number of booths.  
-- A total of `r Votos.Sospechosos` were votes miscounted, be it in the positive or negative sense. That is `r round(Votos.Sospechosos/Total.Emitidos*100, digits = 2)`% of the total amount of votes. 
+- A total of `r Votos.Sospechosos` were votes miscounted, be it in the positive or negative sense. That is, considering that the total amount of votes were `r Total.Emitidos`, this gives`r round(Votos.Sospechosos/Total.Emitidos*100, digits = 2)`% of the total amount of votes. 
 
 These divergences range in the following way:
 ```{r, include = TRUE, echo = FALSE}
@@ -107,21 +107,34 @@ actas_pres %>%
   filter(Sospecha == "Sospechosa")  %>%
   select(Diferencia.Partidos) %>% mysum() %>% kable() %>% kable_styling()
 ```
-The takeaways of this table are as follows:
+Negative median and mean indicates that the majority of these missing votes are _supressions_, i.e. Booths where the votes for the parties were less than the aggregates. 
 
-- Negative median and mean indicates that most of these missing votes are _supressions_, i.e. Booths where the votes for the parties were less than the aggregates.   
+If there is tampering in favor of MAS-IPSP, it is possible that:
 
+- **Booths with a Negative difference** imply a supression of the vote of CC so that MAS-IPSP is the winner.
+- **Booths where there is a Positive difference** imply an increase of the vote in favor of MAS-IPSP, making it the winner. 
 
-### Results
+Otherwise, the observed suppression or increase would be reflective of the proportions in the results of the election.
 
-```{r}
-actas_pres_tidy <- actas_pres %>% melt(
-  measure.vars  = 
-    c("CC","FPV","MTS","UCS","MAS...IPSP","X21F","PDC","MNR","PAN.BOL"),
-  variable_name= "Partido")
+```{r, fig.width=7, fig.height=7, echo = FALSE}
+actas_pres %>%
+  melt(measure.vars  = emitidos,
+       variable_name= "Tipo.de.Voto"
+       ) %>% 
+  group_by(Número.Mesa) %>% 
+  filter(Sospecha == "Sospechosa", value == max(value)) %>%
+  mutate(
+    Diferencia.Positiva = ifelse(Diferencia.Partidos>0, "Incremento", "Supresión")
+    ) %>%
+  ggplot(mapping = aes(Tipo.de.Voto, fill = Diferencia.Positiva)) + 
+  geom_bar(mapping = aes(y=..count../sum(..count..)*100), position = "dodge")
 ```
 
+In this plot, we see that booths where the total voting was underreported (red bars) and overreported (blue bars) show the same behaviour. That is, we are not seeing the behaviour expected by some election tampering **in the sense that they reflect the final result of the vote**.
 
+Further verification of this hypothesis namely requiring seeing whether the suppresed/increased votes per booth were indeed **penalizing for CC and beneficial to MAS-IPSP** require a comparison between the **PRES** and **TREP** samples. 
+
+## Comparison between rapid counting and full report of the election results : the **TREP** vs. **PRES** samples.
 
 ```{r}
 actas_trep <- read.csv("./datasets/acta.2019.10.22.20.38.53.csv")
@@ -129,7 +142,7 @@ actas_trep <- read.csv("./datasets/acta.2019.10.22.20.38.53.csv")
 actas_pres_trep <- actas_trep %>%  
   filter(
     Elección  == "Presidente y Vicepresidente"
-    ) 
+    )
 
 actas_pres_trep$Votos.Partidos <- 
   actas_pres_trep[,partidos] %>% 
@@ -145,51 +158,81 @@ actas_pres_trep$Diferencia.Partidos <-
 actas_pres_trep %>% 
   mutate(
     Sospecha = ifelse(
-      Diferencia.Partidos!=0,"Sospechosa","Normal"),
-    Sampl = "trep"
+      Diferencia.Partidos!=0,"Sospechosa","Normal"), 
+    Sampl = "pres"
     ) -> actas_pres_trep
 
-```
-
-`r nrow (actas_pres)`
-`r nrow (actas_pres_trep)`
-
-## Percieved Sospechaularities
-
-
-```{r}
-actas_pres_trep$Diferencia.Partidos <- 
-  actas_pres_trep$Votos.Partidos - actas_pres_trep$Votos.Válidos
+Total.Sospechas_trep <- sum(actas_pres_trep$Sospecha=="Sospechosa") 
 
 actas_pres_trep %>% 
-  mutate(
-    Sospecha= ifelse(
-      Diferencia.Partidos!=0,"Sospechosa","Normal") 
-    ) -> actas_pres
-
-## 
-
-actas_pres_trep %>% 
-  filter(Sospecha=="Sospechosa")  %>%
-  select(Diferencia.Partidos) %>%
-  summary()
-
-actas_pres_trep %>% 
-  filter(Sospecha=="Sospechosa")  %>%
+  filter(Sospecha == "Sospechosa")  %>%
   select(Diferencia.Partidos) %>%
   abs() %>%
-  sum() 
+  sum() -> Votos.Sospechosos_trep
 
 actas_pres_trep %>% 
   select(Votos.Emitidos) %>% 
-  sum() 
-
-actas_trep_tidy <- actas_pres_trep %>% melt(
-  measure.vars  = 
-    c("CC","FPV","MTS","UCS","MAS...IPSP","X21F","PDC","MNR","PAN.BOL"),
-  variable_name= "Partido")
-
+  sum() -> Total.Emitidos_trep
 ```
+
+- A total of `r Total.Sospechas_trep` booths were deemed as supicious. Given that the total amount of booths is `r nrow(actas_pres_trep)`, this amount represents `r round(Total.Sospechas_trep/nrow(actas_pres_trep)*100, digits = 2)`% of the total number of booths.  
+- A total of `r Votos.Sospechosos_trep` were votes miscounted, be it in the positive or negative sense. That is over a total of `r Total.Emitidos_trep` accounted up to that point, `r round(Votos.Sospechosos_trep/Total.Emitidos_trep*100, digits = 2)`% of the total amount of votes. 
+
+The summary goes as follows:
+
+```{r}
+actas_pres_trep %>% 
+  filter(Sospecha == "Sospechosa")  %>%
+  select(Diferencia.Partidos) %>% mysum() %>% kable() %>% kable_styling()
+```
+
+More votes are negatively corrected. 
+
+```{r, message = FALSE}
+actas_pres %>% 
+  mutate(Computo = "Computo Final") -> actas_pres
+
+actas_pres_trep %>% 
+  mutate(Computo = "Conteo Rapido (TREP)") -> actas_pres_trep
+
+actas_pres %>% 
+  filter(Número.Mesa %in% actas_pres_trep$Número.Mesa) -> 
+  actas_pres_mtch
+
+# both datasets match
+
+actas_pres_diff <- 
+  select(actas_pres_mtch, emitidos) - select(actas_pres_trep, emitidos) 
+
+actas_pres_diff %>% abs() %>% rowSums() -> alterations
+
+actas_pres_mtch %>%
+  mutate(alterations = ifelse(alterations!=0, "Altered", "Normal")) -> 
+  actas_pres_mtch 
+
+actas_pres_mtch[,emitidos] <- actas_pres_diff
+
+actas_pres_mtch  %>% 
+  filter(alterations == "Altered") -> actas_pres_altr
+```
+
+
+```{r}
+actas_pres_altr %>%
+  melt(measure.vars  = emitidos,
+       variable_name= "Tipo.de.Voto"
+       ) %>% 
+  mutate(
+    Alteration = ifelse(value>0, "Incremento", "Supresión")
+    ) %>%
+  ggplot(mapping = aes(Tipo.de.Voto, fill= Alteration)) + 
+  # geom_bar(mapping = aes(y=..count../sum(..count..)*100), position = "dodge")
+  geom_bar(position = "dodge")
+```
+
+
+Approximately all the candidates get the same amount of positive alterations. be
+
 
 ## 2. Overviewing voting per Polling Districts 
 
@@ -201,24 +244,21 @@ However, booths with a small amount of voters:
 2. Hinder the statistical testing process.
 
 ```{r}
-ComoVotaMiRecinto <- function(recinto, porcentajes =FALSE, aggregation= FALSE){
+ComoVotaMiRecinto <- function(recinto, porcentajes =FALSE){
    if(!(recinto %in% levels(actas$Recinto))) {
      stop(message("Nombre de recinto no valido."))
    } else {
-     otpbn <-c("FPV","MTS","UCS","X21F","PDC","MNR","PAN.BOL","Nulos", "Blancos")
      data <- actas_pres %>% melt(
        measure.vars  = partidos,
        variable_name= "Partido") %>%
        mutate(
-         Porcentaje.por.Partido =  value/Votos.Emitidos*100,
-         Partido.OBN = ifelse((Partido %in% otpbn), "Otros-Blanco-Nulo", Partido)
-         ) %>%
+         Porcentaje.por.Partido =  value/Votos.Emitidos*100) %>%
        filter(
          Recinto  == recinto) %>%
-       group_by(Número.Mesa, Partido, Partido.OBN)
+       group_by(Número.Mesa, Partido)
       if(!porcentajes){
         plots <- data %>% 
-          ggplot(mapping = aes(x = ifelse(!aggregation,Partido,Partido.OBN), 
+          ggplot(mapping = aes(x = Partido, 
                                y=value, 
                                fill = factor(Número.Mesa))) +
           geom_col(position ="dodge")+
@@ -228,7 +268,7 @@ ComoVotaMiRecinto <- function(recinto, porcentajes =FALSE, aggregation= FALSE){
           labs(x = "Partido", y = "Total de Votos")
        } else if (porcentajes){
          plots <- data %>% 
-           ggplot(mapping = aes(x = ifelse(!aggregation,Partido,Partido.OBN), 
+           ggplot(mapping = aes(x = Partido, 
                                 y = Porcentaje.por.Partido, 
                                 fill = factor(Número.Mesa))) +
            geom_col(position ="dodge")+
@@ -296,17 +336,14 @@ ComoVotaMiRecinto("Colegio Simon Bolivar", porcentajes = TRUE)
 ```
 
 ```{r}
-ComoVotaMiRecinto("Colegio Simon Bolivar", porcentajes = FALSE , aggregation = TRUE)
-ComoVotaMiRecinto("Colegio Simon Bolivar", porcentajes = TRUE  , aggregation = TRUE)
+ComoVotaMiRecinto("Colegio Simon Bolivar", porcentajes = FALSE)
+ComoVotaMiRecinto("Colegio Simon Bolivar", porcentajes = TRUE)
 ```
 
 
 
 
-
-
-
-```{r}
+```{r, eval = FALSE}
 ComoVotaMiRecinto <- function(recinto, porcentajes =FALSE, aggregation= FALSE){
    if(!(recinto %in% levels(actas$Recinto))) {
      stop(message("Nombre de recinto no valido."))
