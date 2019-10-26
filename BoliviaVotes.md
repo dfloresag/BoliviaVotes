@@ -26,19 +26,36 @@ the following variables:
     that we shall store in a new variable called `Votos.Partidos`.
 
 Our hypothesis is that booths that show divergence between these two
-quantities are suspicious of being tampered, as their difference is
-expected to be zero. We shall identify these booths in the variable
-`Irreg`
+quantities are suspicious of being tampered, as their difference
+(`Votos.Partidos - Votos.Validos`) is expected to be zero. We shall
+identify these booths in the variable `Sospecha`
 
 The conclusions of this first exploration are as follows:
 
-  - A total of
+  - A total of 919 booths were deemed as supicious, which represents
+    2.71% of the total number of booths.  
+  - A total of 1.033810^{4} were miscounted, be it in the positive or
+    negative sense. That is 0.16% of the total amount of votes.
+  - These divergences range in the following way:
 
 <!-- end list -->
 
 ``` r
+knitr::kable(Resumen.Diferencia.Votos)
+```
+
+|  | Diferencia.Partidos |
+|  | :------------------ |
+|  | Min. :-109.00000    |
+|  | 1st Qu.: -8.00000   |
+|  | Median : -2.00000   |
+|  | Mean : -0.05005     |
+|  | 3rd Qu.: 1.00000    |
+|  | Max. : 209.00000    |
+
+``` r
 actas_pres %>% 
-  filter(Irreg=="Irregular")  %>%
+  filter(Sospecha=="Sospechosa")  %>%
   select(Diferencia.Partidos) %>%
   summary()
 ```
@@ -81,15 +98,15 @@ actas_pres_trep$Diferencia.Partidos <-
 
 actas_pres_trep %>% 
   mutate(
-    Irreg = ifelse(
-      Diferencia.Partidos!=0,"Irregular","Regular"),
+    Sospecha = ifelse(
+      Diferencia.Partidos!=0,"Sospechosa","Normal"),
     Sampl = "trep"
     ) -> actas_pres_trep
 ```
 
 33901 33044
 
-## Percieved Irregularities
+## Percieved Sospechaularities
 
 ``` r
 actas_pres_trep$Diferencia.Partidos <- 
@@ -97,14 +114,14 @@ actas_pres_trep$Diferencia.Partidos <-
 
 actas_pres_trep %>% 
   mutate(
-    Irreg = ifelse(
-      Diferencia.Partidos!=0,"Irregular","Regular") 
+    Sospecha= ifelse(
+      Diferencia.Partidos!=0,"Sospechosa","Normal") 
     ) -> actas_pres
 
 ## 
 
 actas_pres_trep %>% 
-  filter(Irreg=="Irregular")  %>%
+  filter(Sospecha=="Sospechosa")  %>%
   select(Diferencia.Partidos) %>%
   summary()
 ```
@@ -119,7 +136,7 @@ actas_pres_trep %>%
 
 ``` r
 actas_pres_trep %>% 
-  filter(Irreg=="Irregular")  %>%
+  filter(Sospecha=="Sospechosa")  %>%
   select(Diferencia.Partidos) %>%
   abs() %>%
   sum() 
@@ -177,7 +194,7 @@ ComoVotaMiRecinto <- function(recinto, porcentajes =FALSE){
                                y=value, 
                                fill = factor(Número.Mesa))) +
           geom_col(position ="dodge")+
-          facet_grid(.~Departamento+Provincia+Localidad+Irreg, 
+          facet_grid(.~Departamento+Provincia+Localidad+Sospecha, 
                      scales = "free_y") + 
           ggtitle(paste("Localidad :", recinto, "- Total")) + 
           labs(x = "Partido", y = "Total de Votos")
@@ -187,7 +204,7 @@ ComoVotaMiRecinto <- function(recinto, porcentajes =FALSE){
                                 y = Porcentaje.por.Partido, 
                                 fill = factor(Número.Mesa))) +
            geom_col(position ="dodge")+
-           facet_grid(.~Departamento+Provincia+Localidad+Irreg, scales = "free_y") + 
+           facet_grid(.~Departamento+Provincia+Localidad+Sospecha, scales = "free_y") + 
            ggtitle(paste("Localidad :", recinto, "- Porcentaje por Mesa"))+ 
            labs(x = "Partido", y = "Porcentaje de Votos")
        }
@@ -198,4 +215,4 @@ ComoVotaMiRecinto <- function(recinto, porcentajes =FALSE){
 
 ### Some Examples
 
-![](BoliviaVotes_files/figure-gfm/unnamed-chunk-17-1.png)<!-- -->![](BoliviaVotes_files/figure-gfm/unnamed-chunk-17-2.png)<!-- -->
+![](BoliviaVotes_files/figure-gfm/unnamed-chunk-18-1.png)<!-- -->![](BoliviaVotes_files/figure-gfm/unnamed-chunk-18-2.png)<!-- -->
