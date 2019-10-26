@@ -5,7 +5,7 @@ output: github_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, 
                       fig.width = 28, 
-                      fig.height=7, cache =TRUE)
+                      fig.height=7, cache =FALSE)
 ```
 
 ```{r, include = FALSE}
@@ -15,6 +15,8 @@ library(ggplot2)
 library(reshape)
 library(dplyr)
 ```
+
+
 
 This document summarizes our attempts at finding voting tampering in the recent Bolivian elections. The datasets were obtained via the official polling authority Organo Electoral Plurinacional (OEP) at the website `http://computo.oep.org.bo`. 
 

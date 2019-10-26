@@ -6,20 +6,59 @@ recent Bolivian elections. The datasets were obtained via the official
 polling authority Organo Electoral Plurinacional (OEP) at the website
 `http://computo.oep.org.bo`.
 
-## 1\. Comparison between Valid Votes and Reports
-
-For this comparison, we are considering two datasets
+For this purpose, we are considering two datasets:
 
   - Results of the rapid counting process obtained on Sunday 22, October
     2019 at 20:38:53 (GMT-4) that we shall call **TREP** sample.
   - Results of the computations Friday 25 October 2019 at
-    01:40:43(GMT-4), which we shall call the **pres** sample.
+    01:40:43(GMT-4), which we shall call the **PRES** sample.
 
 In what follows, we shall focus on the results for the election for
 President and Vicepresident of the Plurinational State.
 
-    ##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-    ##     0.0   189.0   201.0   187.6   209.0   256.0
+## 1\. Comparison between Valid Votes and Polling Booth aggregation.
+
+As a first exercise, we consider the **PRES** sample. We aim to compare
+the following variables:
+
+  - `Votos.Válidos` : The total amount of votes per polling booth.
+  - The aggregate of the votes for the political parties in the booth,
+    that we shall store in a new variable called `Votos.Partidos`.
+
+Our hypothesis is that booths that show divergence between these two
+quantities are suspicious of being tampered, as their difference is
+expected to be zero. We shall identify these booths in the variable
+`Irreg`
+
+The conclusions of this first exploration are as follows:
+
+  - A total of
+
+<!-- end list -->
+
+``` r
+actas_pres %>% 
+  filter(Irreg=="Irregular")  %>%
+  select(Diferencia.Partidos) %>%
+  summary()
+```
+
+    ##  Diferencia.Partidos 
+    ##  Min.   :-109.00000  
+    ##  1st Qu.:  -8.00000  
+    ##  Median :  -2.00000  
+    ##  Mean   :  -0.05005  
+    ##  3rd Qu.:   1.00000  
+    ##  Max.   : 209.00000
+
+### Results
+
+``` r
+actas_pres_tidy <- actas_pres %>% melt(
+  measure.vars  = 
+    c("CC","FPV","MTS","UCS","MAS...IPSP","X21F","PDC","MNR","PAN.BOL"),
+  variable_name= "Partido")
+```
 
 ``` r
 actas_trep <- read.csv("./datasets/acta.2019.10.22.20.38.53.csv")
@@ -51,46 +90,6 @@ actas_pres_trep %>%
 33901 33044
 
 ## Percieved Irregularities
-
-``` r
-actas_pres %>% 
-  filter(Irreg=="Irregular")  %>%
-  select(Diferencia.Partidos) %>%
-  summary()
-```
-
-    ##  Diferencia.Partidos 
-    ##  Min.   :-109.00000  
-    ##  1st Qu.:  -8.00000  
-    ##  Median :  -2.00000  
-    ##  Mean   :  -0.05005  
-    ##  3rd Qu.:   1.00000  
-    ##  Max.   : 209.00000
-
-``` r
-actas_pres %>% 
-  filter(Irreg=="Irregular")  %>%
-  select(Diferencia.Partidos) %>%
-  abs() %>%
-  sum() 
-```
-
-    ## [1] 10338
-
-``` r
-actas_pres %>% 
-  select(Votos.Emitidos) %>% 
-  sum() 
-```
-
-    ## [1] 6358815
-
-``` r
-actas_pres_tidy <- actas_pres %>% melt(
-  measure.vars  = 
-    c("CC","FPV","MTS","UCS","MAS...IPSP","X21F","PDC","MNR","PAN.BOL"),
-  variable_name= "Partido")
-```
 
 ``` r
 actas_pres_trep$Diferencia.Partidos <- 
